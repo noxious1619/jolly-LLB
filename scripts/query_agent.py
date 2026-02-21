@@ -86,7 +86,7 @@ def load_vector_db() -> Chroma:
 def build_qa_chain(vector_db: Chroma) -> RetrievalQA:
     """Build the LangChain RetrievalQA chain with the Citizen Advocate prompt."""
     llm = ChatGoogleGenerativeAI(
-        model="gemini-2.5-pro",
+        model="gemini-2.5-flash",
         temperature=0.3,           
         convert_system_message_to_human=True,
     )
