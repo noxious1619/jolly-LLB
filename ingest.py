@@ -10,10 +10,23 @@ from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 
-try:
+# ── Data Source Toggle ────────────────────────────────────────────────────────
+# Set USE_REAL_DATA = True to download 723 real schemes from HuggingFace (slower, first run ~30MB)
+# Set USE_REAL_DATA = False to use the local dummy_data.py (fast, no internet needed)
+USE_REAL_DATA = False
+MAX_SCHEMES = None   # Only used when USE_REAL_DATA=True; set to e.g. 50 for a quick test
+
+if USE_REAL_DATA:
+    try:
+        from data.load_schemes import load_real_schemes
+        SCHEMES = load_real_schemes(max_schemes=MAX_SCHEMES)
+        print(f"✅ Loaded {len(SCHEMES)} real schemes from HuggingFace.")
+    except Exception as e:
+        print(f"⚠️  HuggingFace load failed ({e}), falling back to dummy data.")
+        from data.dummy_data import SCHEMES
+else:
     from data.dummy_data import SCHEMES
-except ImportError:
-    SCHEMES = [{"id": 1, "name": "Test", "description": "Test", "eligibility": {}}]
+    print(f"📋 Using local dummy data: {len(SCHEMES)} schemes.")
 
 load_dotenv()
 
@@ -59,25 +72,30 @@ def run_ingestion():
     print("=" * 60)
 
     if not os.getenv("GOOGLE_API_KEY"):
-        print("❌ GOOGLE_API_KEY not found. Create a .env file with your key.")
+        print(" GOOGLE_API_KEY not found. Create a .env file with your key.")
         print("   See .env.example for the template.")
         return
 
     try:
         embeddings = GeminiEmbeddings(model="models/gemini-embedding-001")
         docs = build_documents(SCHEMES)
-        print(f"📄 Ingesting {len(docs)} scheme(s)...")
+        total = len(docs)
+        print(f"📄 Building FAISS index for {total} scheme(s)... (this may take a few minutes)")
 
         vector_db = FAISS.from_documents(documents=docs, embedding=embeddings)
         vector_db.save_local("faiss_index")
 
         print(f"\n✅ Done! FAISS index saved to 'faiss_index/'")
-        print(f"   Schemes ingested:")
-        for s in SCHEMES:
+        print(f"   Total schemes ingested: {total}")
+        # Print first 10 scheme names to keep output readable
+        preview = SCHEMES[:10]
+        for s in preview:
             print(f"     • {s['name']}")
+        if total > 10:
+            print(f"     ... and {total - 10} more.")
 
     except Exception as e:
-        print(f"❌ Ingestion failed: {e}")
+        print(f" Ingestion failed: {e}")
 
 
 if __name__ == "__main__":
