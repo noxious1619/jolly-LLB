@@ -20,7 +20,8 @@ from typing import Callable, Optional
 from playwright.async_api import async_playwright, Browser, Page
 
 # URL of the dummy portal served by FastAPI's StaticFiles
-PORTAL_URL = "http://localhost:8000/static/dummy_portal.html"
+# Using 127.0.0.1 instead of localhost for more reliable resolution on Windows
+PORTAL_URL = "http://127.0.0.1:8000/static/dummy_portal.html"
 
 # Maps scheme_id → CSS selectors in the dummy portal HTML
 SCHEME_FIELD_MAP = {
@@ -129,14 +130,14 @@ async def launch_form_filler(
             await page.bring_to_front()
 
             # Navigate to portal
-            print("[FormFiller] Navigating to portal...")
+            print(f"[FormFiller] Navigating to: {PORTAL_URL}")
             try:
                 await page.goto(PORTAL_URL, wait_until="domcontentloaded", timeout=60000)
                 await page.evaluate(
                     f"document.title = 'JOLLY-LLB - Applying: {scheme_id}'"
                 )
                 await page.bring_to_front()  # bring to front again after navigation
-                print("[FormFiller] Portal loaded - OK")
+                print(f"[FormFiller] Portal loaded successfully: {page.url}")
             except Exception as e:
                 print(f"[FormFiller] WARN: Portal load issue (browser still open): {e}")
 

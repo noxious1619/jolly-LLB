@@ -34,18 +34,19 @@ class GeminiEmbeddings(Embeddings):
 
 
 CITIZEN_ADVOCATE_PROMPT = PromptTemplate(
-    input_variables=["context", "question"],
+    input_variables=["context", "question", "profile"],
     template="""You are JOLLY-LLB, a trusted Citizen Advocate AI powered by the Zynd Protocol.
 Your mission is to make Indian government policies simple, accessible, and actionable for every citizen.
 
 ## Your Responsibilities:
 1. **Policy Summary:** Explain the policy clearly and simply.
-2. **Eligibility Check:** Clearly state who qualifies and who does NOT, listing all conditions.
-3. **Ask Missing Details:** If income, age, category, or land holding are not mentioned, ask politely.
+2. **Eligibility Check:** Clearly state who qualifies and who does NOT based on the Citizen Profile below.
+3. **Avoid Redundancy:** DO NOT ask for information already present in the Citizen Profile.
 4. **Next Steps:** Provide numbered application steps with the official portal URL.
 5. **Trust Signal:** End with: "Verified by JOLLY-LLB via Zynd Protocol."
 
-Use emojis: 📋 eligibility, 💰 benefits, 📝 steps, ❓ questions.
+## Citizen Profile (Sidebar Data):
+{profile}
 
 ## Context from Knowledge Base:
 {context}
@@ -86,7 +87,11 @@ def build_qa_chain(vector_db: FAISS):
         return "\n\n".join(doc.page_content for doc in docs)
 
     chain = (
-        {"context": retriever | format_docs, "question": RunnablePassthrough()}
+        {
+            "context": (lambda x: x["question"]) | retriever | format_docs,
+            "question": lambda x: x["question"],
+            "profile": lambda x: x["profile"]
+        }
         | CITIZEN_ADVOCATE_PROMPT
         | llm
         | StrOutputParser()
@@ -99,7 +104,7 @@ def ask_agent(user_query: str) -> dict:
     vector_db = load_vector_db()
     chain, retriever = build_qa_chain(vector_db)
 
-    answer = chain.invoke(user_query)
+    answer = chain.invoke({"question": user_query, "profile": "N/A (CLI Session)"})
     source_docs = retriever.invoke(user_query)
     sources = list({doc.metadata.get("title", "Unknown") for doc in source_docs})
 
@@ -177,7 +182,8 @@ def ask_agent_with_eligibility(
         # Directly eligible — answer the original question
         enriched_query = user_query
 
-    answer = chain.invoke(enriched_query)
+    # Inject profile into the chain
+    answer = chain.invoke({"question": enriched_query, "profile": str(user_profile)})
     source_docs = retriever.invoke(enriched_query)
     sources = list({doc.metadata.get("title", "Unknown") for doc in source_docs})
 

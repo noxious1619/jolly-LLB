@@ -10,7 +10,7 @@ Endpoints:
 """
 
 import asyncio
-import json
+import os
 from contextlib import asynccontextmanager
 from typing import Optional
 
@@ -18,6 +18,10 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+
+# Resolve absolute path for templates
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
 
 
 # ─── Global session state ────────────────────────────────────────────────────
@@ -83,7 +87,8 @@ app.add_middleware(
 )
 
 # Serve dummy_portal.html at /static/dummy_portal.html
-app.mount("/static", StaticFiles(directory="templates"), name="static")
+print(f"[API] Mounting static files from: {TEMPLATES_DIR}")
+app.mount("/static", StaticFiles(directory=TEMPLATES_DIR), name="static")
 
 
 # ─── Endpoints ────────────────────────────────────────────────────────────────

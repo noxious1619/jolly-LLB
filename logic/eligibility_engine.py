@@ -19,42 +19,37 @@ POLICY_DB: dict[str, dict] = {
         "name": "NSP Pre-Matric Scholarship for Minorities",
         "category": "Scholarship / Education",
         "annual_family_income_max_inr": 100_000,
-        "min_age": 0,          # Class 1+, no strict numeric floor
-        "max_age": 17,         # up to Class 10 (approx. ≤17 years)
-        "allowed_communities": [
-            "Muslim", "Christian", "Sikh", "Buddhist", "Jain", "Zoroastrian"
-        ],
+        "min_age": 0,
+        "max_age": 17,
+        "allowed_communities": ["Muslim", "Christian", "Sikh", "Buddhist", "Jain", "Zoroastrian"],
         "min_attendance_percent": 75,
+        "required_docs": ["Income Certificate", "Community Certificate", "Aadhaar Card", "Previous Year Marksheet", "Bank Passbook"],
     },
 
     # scheme_002 — PM-KISAN
     "scheme_002": {
         "name": "PM-KISAN (Pradhan Mantri Kisan Samman Nidhi)",
         "category": "Farming / Agriculture",
-        "annual_family_income_max_inr": float("inf"),   # no hard income cap
+        "annual_family_income_max_inr": float("inf"),
         "min_age": 18,
         "max_age": 999,
-        "must_be_farmer": True,         # must hold cultivable land
-        "excluded_occupations": [
-            "minister", "mp", "mla", "retired_govt_employee",
-            "doctor", "engineer", "lawyer", "chartered_accountant",
-            "architect", "income_tax_payer",
-        ],
+        "must_be_farmer": True,
+        "excluded_occupations": ["minister", "mp", "mla", "retired_govt_employee", "doctor", "engineer", "lawyer", "chartered_accountant", "architect", "income_tax_payer"],
+        "required_docs": ["Land Ownership Documents (Khata/Khesra)", "Aadhaar Card", "Bank Account Details", "Mobile Number (Linked with Aadhaar)"],
     },
 
     # scheme_003 — Startup India Seed Fund Scheme (SISFS)
     "scheme_003": {
         "name": "Startup India Seed Fund Scheme (SISFS)",
         "category": "Startup / Entrepreneurship",
-        "annual_family_income_max_inr": float("inf"),   # not income-gated
+        "annual_family_income_max_inr": float("inf"),
         "min_age": 18,
         "max_age": 999,
         "startup_age_max_years": 2,
         "prior_govt_funding_max_inr": 1_000_000,
         "requires_dpiit": True,
-        "allowed_entity_types": [
-            "Private Limited Company", "LLP", "Partnership Firm"
-        ],
+        "allowed_entity_types": ["Private Limited Company", "LLP", "Partnership Firm"],
+        "required_docs": ["DPIIT Recognition Certificate", "GST Registration", "Pitch Deck", "Bank Statement (6 months)"],
     },
 
     # scheme_004 — Ayushman Bharat PM-JAY
