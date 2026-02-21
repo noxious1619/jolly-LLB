@@ -100,13 +100,14 @@ async def health():
 @app.post("/start-form", response_model=StatusResponse)
 async def start_form(req: ZyndTask):
     """
-    Launches Playwright and opens the government portal for form filling.
+    Launches Playwright and opens the dummy portal for form filling.
 
     Accepts both:
       - Standard Zynd A2A Task payload  (user_profile + scheme_id + task_id + agent_did)
       - Simple Streamlit payload        (user_data + scheme_id)
 
-    This endpoint is designed to be callable by any Zynd agent via A2A.
+    Uses the hardcoded SCHEME_FIELD_MAP selector tables — great for the
+    local dummy portal. For real government sites, use /start-form-intelligent.
     """
     if session.status in ("browser_open", "filling"):
         raise HTTPException(
@@ -127,15 +128,17 @@ async def start_form(req: ZyndTask):
     if not resolved_data:
         raise HTTPException(status_code=422, detail="user_profile or user_data is required.")
 
-    caller_info = f" | caller: {req.agent_did}" if req.agent_did else ""
-    caller_info += f" | task: {req.task_id}" if req.task_id else ""
+    caller_info  = f" | caller: {req.agent_did}" if req.agent_did else ""
+    caller_info += f" | task: {req.task_id}"    if req.task_id   else ""
 
-    session.event     = asyncio.Event()  # resume signal — set by /resume-form
-    session.ready     = asyncio.Event()  # readiness signal — set by form_filler when paused
+    session.event     = asyncio.Event()
+    session.ready     = asyncio.Event()
     session.user_data = resolved_data
     session.scheme_id = req.scheme_id
     session.status    = "browser_open"
-    session.message   = f"Browser launched. Log in to the portal, then call /resume-form.{caller_info}"
+    session.message   = (
+        f"Browser launched (dummy portal). Log in and call /resume-form.{caller_info}"
+    )
 
     asyncio.create_task(
         launch_form_filler(
@@ -143,6 +146,91 @@ async def start_form(req: ZyndTask):
             ready=session.ready,
             scheme_id=session.scheme_id,
             user_data=session.user_data,
+            on_done=_on_fill_done,
+            on_error=_on_fill_error,
+        )
+    )
+
+    return StatusResponse(status=session.status, message=session.message)
+
+
+# ── Intelligent form filler (LLM-powered, any real government URL) ────────────
+
+# Scheme ID → official government portal URL
+SCHEME_PORTAL_URLS: dict[str, str] = {
+    "scheme_001": "https://scholarships.gov.in",
+    "scheme_002": "https://pmkisan.gov.in/RegistrationFormupdated.aspx",
+    "scheme_003": "https://seedfund.startupindia.gov.in",
+    "scheme_004": "https://pmjay.gov.in",
+    "scheme_005": "https://pmayg.nic.in",
+    "scheme_007": "https://www.pmkvyofficial.org",
+    "scheme_008": "https://nsap.nic.in",
+    "scheme_009": "https://pmsvanidhi.mohua.gov.in",
+    "scheme_010": "https://scholarships.gov.in",
+    "scheme_011": "https://pmfby.gov.in",
+    "scheme_012": "https://pmsuryaghar.gov.in",
+}
+
+
+@app.post("/start-form-intelligent", response_model=StatusResponse)
+async def start_form_intelligent(req: ZyndTask):
+    """
+    Launches the LLM-powered intelligent form filler on the REAL government
+    portal for the given scheme_id.
+
+    Flow:
+      1. Looks up the official portal URL from SCHEME_PORTAL_URLS.
+      2. Opens it in Edge/Chrome via Playwright.
+      3. PAUSES — human logs in / enters OTP.
+      4. On /resume-form, snapshots DOM fields via JS, sends to Groq LLM,
+         LLM returns a fill plan, bot executes it.
+
+    Works on ANY government site — no hardcoded CSS selectors needed.
+    """
+    if session.status in ("browser_open", "filling"):
+        raise HTTPException(
+            status_code=409,
+            detail="A form session is already active. Complete or cancel it first."
+        )
+
+    try:
+        from agents.intelligent_form_filler import launch_intelligent_filler
+    except ImportError:
+        raise HTTPException(
+            status_code=500,
+            detail="Playwright not installed. Run: pip install playwright && playwright install"
+        )
+
+    resolved_data = req.resolved_user_data()
+    if not resolved_data:
+        raise HTTPException(status_code=422, detail="user_profile or user_data is required.")
+
+    portal_url = SCHEME_PORTAL_URLS.get(req.scheme_id)
+    if not portal_url:
+        raise HTTPException(
+            status_code=422,
+            detail=f"No portal URL configured for scheme_id '{req.scheme_id}'."
+        )
+
+    caller_info  = f" | caller: {req.agent_did}" if req.agent_did else ""
+    caller_info += f" | task: {req.task_id}"    if req.task_id   else ""
+
+    session.event     = asyncio.Event()
+    session.ready     = asyncio.Event()
+    session.user_data = resolved_data
+    session.scheme_id = req.scheme_id
+    session.status    = "browser_open"
+    session.message   = (
+        f"Browser opened at {portal_url}. "
+        f"Log in / enter OTP, then call /resume-form.{caller_info}"
+    )
+
+    asyncio.create_task(
+        launch_intelligent_filler(
+            url=portal_url,
+            user_data=resolved_data,
+            event=session.event,
+            ready=session.ready,
             on_done=_on_fill_done,
             on_error=_on_fill_error,
         )
