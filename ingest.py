@@ -3,25 +3,18 @@ import json
 from dotenv import load_dotenv
 from typing import List
 
-<<<<<<< HEAD
 # New google.genai SDK (replaces deprecated google.generativeai)
-=======
-
->>>>>>> 824ad66cbfc35f6c277c9621b967534500cb8e42
 from google import genai
 from google.genai import types
 from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 
-<<<<<<< HEAD
-try:
-=======
 # ── Data Source Toggle ────────────────────────────────────────────────────────
-# Set USE_REAL_DATA = True to download 723 real schemes from HuggingFace (slower, first run ~30MB)
-# Set USE_REAL_DATA = False to use the local dummy_data.py (fast, no internet needed)
+# Set USE_REAL_DATA = True to download real schemes from HuggingFace (~30MB, first run)
+# Set USE_REAL_DATA = False to use local dummy_data.py (fast, no internet needed)
 USE_REAL_DATA = False
-MAX_SCHEMES = None   # Only used when USE_REAL_DATA=True; set to e.g. 50 for a quick test
+MAX_SCHEMES = None   # Only used when USE_REAL_DATA=True; e.g. 50 for quick test
 
 if USE_REAL_DATA:
     try:
@@ -32,9 +25,7 @@ if USE_REAL_DATA:
         print(f"⚠️  HuggingFace load failed ({e}), falling back to dummy data.")
         from data.dummy_data import SCHEMES
 else:
->>>>>>> 824ad66cbfc35f6c277c9621b967534500cb8e42
     from data.dummy_data import SCHEMES
-    print(f"📋 Using local dummy data: {len(SCHEMES)} schemes.")
 
 load_dotenv()
 
@@ -80,47 +71,28 @@ def run_ingestion():
     print("=" * 60)
 
     if not os.getenv("GOOGLE_API_KEY"):
-<<<<<<< HEAD
         print("❌ GOOGLE_API_KEY not found. Create a .env file with your key.")
-=======
-        print(" GOOGLE_API_KEY not found. Create a .env file with your key.")
->>>>>>> 824ad66cbfc35f6c277c9621b967534500cb8e42
         print("   See .env.example for the template.")
         return
 
     try:
         embeddings = GeminiEmbeddings(model="models/gemini-embedding-001")
         docs = build_documents(SCHEMES)
-<<<<<<< HEAD
-        print(f"📄 Ingesting {len(docs)} scheme(s)...")
-=======
         total = len(docs)
-        print(f"📄 Building FAISS index for {total} scheme(s)... (this may take a few minutes)")
->>>>>>> 824ad66cbfc35f6c277c9621b967534500cb8e42
+        print(f"📄 Ingesting {total} scheme(s)...")
 
         vector_db = FAISS.from_documents(documents=docs, embedding=embeddings)
         vector_db.save_local("faiss_index")
 
         print(f"\n✅ Done! FAISS index saved to 'faiss_index/'")
-<<<<<<< HEAD
         print(f"   Schemes ingested:")
-        for s in SCHEMES:
-            print(f"     • {s['name']}")
-
-    except Exception as e:
-        print(f"❌ Ingestion failed: {e}")
-=======
-        print(f"   Total schemes ingested: {total}")
-        # Print first 10 scheme names to keep output readable
-        preview = SCHEMES[:10]
-        for s in preview:
+        for s in SCHEMES[:10]:
             print(f"     • {s['name']}")
         if total > 10:
             print(f"     ... and {total - 10} more.")
 
     except Exception as e:
-        print(f" Ingestion failed: {e}")
->>>>>>> 824ad66cbfc35f6c277c9621b967534500cb8e42
+        print(f"❌ Ingestion failed: {e}")
 
 
 if __name__ == "__main__":

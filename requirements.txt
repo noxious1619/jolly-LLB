@@ -140,3 +140,6 @@ xxhash==3.6.0
 yarl==1.22.0
 zipp==3.23.0
 zstandard==0.25.0
+# ── Form Filler & Frontend (added in Phase 2) ─────────────────────────────────
+streamlit>=1.40.0
+playwright>=1.45.0
