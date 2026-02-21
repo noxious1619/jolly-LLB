@@ -3,12 +3,13 @@
 from app.routers import classify_intent
 from app.extractor import extract_user_profile, check_missing_fields
 from app.memory import ConversationMemory
+from app.rule_engine import check_eligibility
 from scripts.query_agent import ask_agent
 
 
 class FlowController:
     """
-    Orchestrates full Track-1 conversational flow.
+    Orchestrates full conversational flow.
     """
 
     def __init__(self):
@@ -19,11 +20,11 @@ class FlowController:
         # 1️⃣ Detect Intent
         intent = await classify_intent(message)
 
-        # Casual Chat
+        # Casual chat
         if intent == "casual":
             return "Hello 👋 How can I help you with government schemes?"
 
-        # Policy search or providing info
+        # Policy flow
         if intent in ["policy_search", "providing_missing_info"]:
 
             extracted = await extract_user_profile(message)
@@ -34,11 +35,16 @@ class FlowController:
             if missing:
                 return f"Please provide your {missing[0]}."
 
-            # Profile complete → Trigger RAG
-            rag_result = ask_agent(message)
-            return rag_result["answer"]
+            # ✅ Deterministic Rule Engine
+            eligibility_result = check_eligibility(updated_profile)
 
-        # Application request (future integration)
+            if eligibility_result["eligible"]:
+                rag_result = ask_agent(message)
+                return rag_result["answer"]
+            else:
+                return "You are not eligible based on current scheme criteria."
+
+        # Application flow (future)
         if intent == "application_request":
             return "Application flow not yet connected. (Rule engine + Playwright pending)"
 
