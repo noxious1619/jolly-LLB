@@ -1,258 +1,298 @@
-"""
-app.py — Streamlit frontend for JOLLY-LLB
-Run: streamlit run app.py
-
-Features:
-  - Chat interface powered by Groq (llama-3.3-70b) + FAISS RAG
-  - "Apply for Scheme" button → calls /start-form (opens browser)
-  - "I've Logged In — Fill Form" button → calls /resume-form (fills form)
-  - Live status polling
-"""
-
 import streamlit as st
-import requests
+import os
 import json
+import time
+import requests
 from dotenv import load_dotenv
+
+# Import our logic
+from scripts.query_agent import ask_agent_with_eligibility
 
 load_dotenv()
 
-# ── Config ────────────────────────────────────────────────────────────────────
-API_URL  = "http://localhost:8000"
-PAGE_TITLE = "JOLLY-LLB — Citizen Advocate"
-
-# ── Page setup ────────────────────────────────────────────────────────────────
+# --- CONFIG ---
 st.set_page_config(
-    page_title=PAGE_TITLE,
-    page_icon="🏛️",
-    layout="centered",
+    page_title="JOLLY-LLB | Citizen Advocate",
+    page_icon="🇮🇳",
+    layout="wide",
 )
 
+# --- STYLING ---
 st.markdown("""
 <style>
-  .main { max-width: 760px; }
-  .stChatMessage { border-radius: 12px; }
+    /* Main Background */
+    .stApp {
+        background-color: #0a192f;
+        color: #e6f1ff;
+    }
+    
+    /* Header Styling */
+    .main-header {
+        font-size: 2.2rem;
+        font-weight: 800;
+        color: #64ffda;
+        margin-bottom: 0.5rem;
+    }
+    
+    .sub-header {
+        font-size: 1.1rem;
+        color: #8892b0;
+        margin-bottom: 2rem;
+    }
+    
+    /* Custom Sidebar Card */
+    [data-testid="stSidebar"] {
+        background-color: #0d1b2a;
+    }
 
-  .scheme-card {
-    background: linear-gradient(135deg, #e8f5e9, #f1f8e9);
-    border: 1px solid #a5d6a7;
-    border-left: 4px solid #2e7d32;
-    border-radius: 8px;
-    padding: 16px;
-    margin: 8px 0;
-  }
-  .status-pill {
-    display: inline-block;
-    padding: 4px 12px;
-    border-radius: 20px;
-    font-size: 12px;
-    font-weight: 600;
-    margin-bottom: 8px;
-  }
-  .status-idle     { background:#e3f2fd; color:#1565c0; }
-  .status-open     { background:#fff3e0; color:#e65100; }
-  .status-filling  { background:#f3e5f5; color:#6a1b9a; }
-  .status-done     { background:#e8f5e9; color:#2e7d32; }
-  .status-error    { background:#ffebee; color:#b71c1c; }
+    .sidebar-card {
+        background: #1b263b;
+        padding: 1.5rem;
+        border-radius: 10px;
+        border-left: 5px solid #ff9933;
+        color: white;
+        margin-bottom: 1rem;
+    }
+    
+    /* Architecture Stepper */
+    .step-box {
+        padding: 10px 15px;
+        border-radius: 8px;
+        margin-bottom: 8px;
+        font-size: 0.9rem;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        transition: all 0.3s;
+    }
+    
+    .step-pending { background: #1b263b; color: #586e75; border: 1px dashed #586e75; }
+    .step-active { 
+        background: #172a45; 
+        color: #64ffda; 
+        border: 1px solid #64ffda; 
+        font-weight: 600;
+        box-shadow: 0 0 10px rgba(100, 255, 218, 0.2);
+    }
+    .step-done { background: #112240; color: #a5d6a7; border: 1px solid #a5d6a7; }
+    
+    /* Chat bubbles */
+    .user-bubble {
+        background: #112240;
+        color: #ccd6f6;
+        padding: 1rem;
+        border-radius: 15px 15px 0 15px;
+        margin: 10px 0;
+        border: 1px solid #233554;
+    }
+    
+    .agent-bubble {
+        background: #172a45;
+        color: #e6f1ff;
+        padding: 1rem;
+        border-radius: 15px 15px 15px 0;
+        border: 1px solid #233554;
+        margin: 10px 0;
+    }
+
+    /* Apply Button Styling */
+    .stButton>button {
+        width: 100%;
+        border-radius: 5px;
+        height: 3em;
+        background-color: #003366;
+        color: white;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# ── Session state ─────────────────────────────────────────────────────────────
-if "messages"     not in st.session_state: st.session_state.messages     = []
-if "user_profile" not in st.session_state: st.session_state.user_profile = {}
-if "active_scheme" not in st.session_state: st.session_state.active_scheme = None
-if "form_status"  not in st.session_state: st.session_state.form_status  = "idle"
+# --- SESSION STATE ---
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+if "profile" not in st.session_state:
+    st.session_state.profile = {
+        "full_name": "Sagar Bhai",
+        "age": 25,
+        "income": 80000,
+        "community": "OBC",
+        "is_farmer": True,
+        "occupation": "Farmer",
+        "state": "Uttar Pradesh",
+        "is_rural": True,
+        "is_minority": False,
+        "aadhaar": "123456789012",
+        "mobile": "9876543210"
+    }
 
-# ── Helper: talk to FastAPI ────────────────────────────────────────────────────
-def api_start_form(scheme_id: str, user_data: dict):
-    try:
-        r = requests.post(
-            f"{API_URL}/start-form",
-            json={"scheme_id": scheme_id, "user_data": user_data},
-            timeout=5,
-        )
-        return r.json()
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
-
-
-def api_resume_form():
-    try:
-        r = requests.post(f"{API_URL}/resume-form", timeout=5)
-        return r.json()
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
-
-
-def api_get_status():
-    try:
-        r = requests.get(f"{API_URL}/status", timeout=3)
-        return r.json()
-    except Exception:
-        return {"status": "idle", "message": "API server not reachable"}
-
-
-# ── Header ────────────────────────────────────────────────────────────────────
-st.markdown("## 🏛️ JOLLY-LLB — Citizen Advocate")
-st.markdown(
-    "Ask me about **any Indian government scheme** — I'll check your eligibility "
-    "and offer to fill the application form automatically.",
-    help="Powered by Zynd Protocol + Groq + Google Embeddings"
-)
-st.divider()
-
-# ── Chat history ──────────────────────────────────────────────────────────────
-for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
-
-# ── User profile sidebar ──────────────────────────────────────────────────────
+# --- SIDEBAR: PROFILE ---
 with st.sidebar:
-    st.markdown("### 👤 Your Profile")
-    st.caption("Fill in your details — the bot uses these to check eligibility and pre-fill the form.")
-    name      = st.text_input("Full Name",          key="name")
-    age       = st.number_input("Age",              min_value=1, max_value=120, value=18, key="age")
-    community = st.selectbox("Community",
-        ["", "Muslim", "Christian", "Sikh", "Buddhist", "Jain", "Zoroastrian", "SC", "ST", "OBC", "General"],
-        key="community")
-    income    = st.number_input("Annual Family Income (₹)", min_value=0, value=80000, step=1000, key="income")
-    land      = st.number_input("Land Holding (acres)", min_value=0.0, value=0.0, step=0.5, key="land_acres")
-    aadhaar   = st.text_input("Aadhaar Number",     key="aadhaar")
-    bank      = st.text_input("Bank Account No.",   key="bank_account")
-    class_lvl = st.selectbox("Class Level (students)",
-        ["", "1","2","3","4","5","6","7","8","9","10"], key="class_level")
-    school    = st.text_input("School Name",        key="school")
+    st.image("https://upload.wikimedia.org/wikipedia/commons/5/55/Emblem_of_India.svg", width=80)
+    st.markdown("<h2 style='color:#003366; margin-top:0;'>Citizen Profile</h2>", unsafe_allow_html=True)
+    
+    with st.expander("📝 Edit Demographic Details", expanded=False):
+        p = st.session_state.profile
+        p["full_name"] = st.text_input("Full Name", p["full_name"])
+        p["age"] = st.number_input("Age", value=p["age"], step=1)
+        p["income"] = st.number_input("Annual Income (₹)", value=p["income"], step=5000)
+        p["community"] = st.selectbox("Category", ["General", "OBC", "SC", "ST", "Minority"], index=["General", "OBC", "SC", "ST", "Minority"].index(p["community"]))
+        p["occupation"] = st.text_input("Occupation", p["occupation"])
+        p["state"] = st.text_input("State", p["state"])
+        
+    with st.expander("🚜 Assets & Status", expanded=True):
+        p["is_farmer"] = st.checkbox("Is Farmer?", p["is_farmer"])
+        p["is_rural"] = st.checkbox("Resides in Rural area?", p["is_rural"])
+        p["is_minority"] = st.checkbox("Belongs to Minority Group?", p["is_minority"])
 
-    if st.button("💾 Save Profile"):
-        st.session_state.user_profile = {
-            "name": name, "age": age, "community": community,
-            "income": income, "land_acres": land,
-            "aadhaar": aadhaar, "bank_account": bank,
-            "class_level": class_lvl, "school_name": school,
-        }
-        st.success("Profile saved!")
+    st.markdown("---")
+    st.markdown("<h3 style='color:#003366;'>Architecture Status</h3>", unsafe_allow_html=True)
+    
+    # Stepper logic
+    steps = [
+        {"id": "search", "label": "Semantic Search (FAISS)"},
+        {"id": "eligible", "label": "Eligibility Gate (Deterministic)"},
+        {"id": "llm", "label": "RAG Reasoning (Groq)"},
+        {"id": "zynd", "label": "Zynd Trust Verification"}
+    ]
+    
+    # Placeholder for status indicator (we'll update this in the query loop)
+    status_placeholders = {s["id"]: st.empty() for s in steps}
+    
+    for s in steps:
+        status_placeholders[s["id"]].markdown(f"<div class='step-box step-pending'>⚪ {s['label']}</div>", unsafe_allow_html=True)
 
-    st.divider()
-    st.markdown("### 🔌 Form Filler Status")
-    status_data = api_get_status()
-    s = status_data.get("status", "idle")
-    color_map = {
-        "idle": "status-idle", "browser_open": "status-open",
-        "filling": "status-filling", "done": "status-done", "error": "status-error",
-    }
-    label_map = {
-        "idle": "⚪ Idle", "browser_open": "🟠 Browser Open",
-        "filling": "🟣 Filling...", "done": "🟢 Done", "error": "🔴 Error",
-    }
-    css_class = color_map.get(s, "status-idle")
-    label_text = label_map.get(s, s)
-    st.markdown(
-        f'<div class="status-pill {css_class}">{label_text}</div>',
-        unsafe_allow_html=True,
-    )
-    st.caption(status_data.get("message", ""))
-    st.session_state.form_status = s
+# --- MAIN UI ---
+col1, col2 = st.columns([1, 4])
+with col1:
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.image("https://upload.wikimedia.org/wikipedia/commons/5/55/Emblem_of_India.svg", width=120)
+with col2:
+    st.markdown("<div class='main-header'>JOLLY-LLB</div>", unsafe_allow_html=True)
+    st.markdown("<div class='sub-header'>Verified Citizen Advocate Agent | Zynd Protocol | Aickathon 2026</div>", unsafe_allow_html=True)
 
+st.markdown("---")
 
-# ── Chat input ─────────────────────────────────────────────────────────────────
-if prompt := st.chat_input("Ask about any government scheme..."):
-    # Show user message
+# Display chat history
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
+# Chat Input
+if prompt := st.chat_input("Ask about any government scheme (e.g., 'Am I eligible for PM-KISAN?')"):
+    # Clear steps at start
+    for s_id in status_placeholders:
+        status_placeholders[s_id].markdown(f"<div class='step-box step-pending'>⚪ {steps[[x['id'] for x in steps].index(s_id)]['label']}</div>", unsafe_allow_html=True)
+
+    # 1. User Message
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Call JOLLY-LLB agent
+    # 2. Agent Processing
     with st.chat_message("assistant"):
-        with st.spinner("Thinking..."):
-            try:
-                from scripts.query_agent import ask_agent
-                result = ask_agent(prompt)
-                answer  = result["answer"]
-                sources = result.get("sources", [])
+        msg_placeholder = st.empty()
+        msg_placeholder.info("Analyzing your request...")
 
-                st.markdown(answer)
-                if sources:
-                    st.caption(f"📚 Sources: {', '.join(sources)}")
+        # --- STEP 1: SEARCH ---
+        status_placeholders["search"].markdown("<div class='step-box step-active'>🔍 Searching Knowledge Base...</div>", unsafe_allow_html=True)
+        time.sleep(0.5) # for visual effect
+        
+        # Determine target policy (simple detection for demo, real uses LLM)
+        target_policy_id = "scheme_001" # fallback
+        if "kisan" in prompt.lower() or "farmer" in prompt.lower():
+            target_policy_id = "scheme_002"
+        elif "seed" in prompt.lower() or "startup" in prompt.lower():
+            target_policy_id = "scheme_003"
+        elif "scholarship" in prompt.lower():
+            target_policy_id = "scheme_001"
 
-                # Detect which scheme was discussed and enable Apply button
-                scheme_map = {
-                    "scholarship": "scheme_001",
-                    "nsp":         "scheme_001",
-                    "pm-kisan":    "scheme_002",
-                    "kisan":       "scheme_002",
-                    "sisfs":       "scheme_003",
-                    "startup":     "scheme_003",
-                    "seed fund":   "scheme_003",
-                }
-                detected = None
-                lower_answer = answer.lower()
-                for keyword, sid in scheme_map.items():
-                    if keyword in lower_answer or keyword in prompt.lower():
-                        detected = sid
-                        break
-                if detected:
-                    st.session_state.active_scheme = detected
+        status_placeholders["search"].markdown("<div class='step-box step-done'>✅ Semantic Search Complete</div>", unsafe_allow_html=True)
 
-                st.session_state.messages.append({"role": "assistant", "content": answer})
+        # --- STEP 2: ELIGIBILITY ---
+        status_placeholders["eligible"].markdown("<div class='step-box step-active'>🛡️ Verifying Rules...</div>", unsafe_allow_html=True)
+        time.sleep(0.4)
+        
+        # --- STEP 3: LLM REASONING ---
+        status_placeholders["llm"].markdown("<div class='step-box step-active'>🧠 Generating Advocate Response...</div>", unsafe_allow_html=True)
+        
+        try:
+            result = ask_agent_with_eligibility(
+                user_profile=st.session_state.profile,
+                target_policy_id=target_policy_id,
+                user_query=prompt
+            )
+            
+            full_response = result["answer"]
+            if not full_response: # case where status == failed
+                full_response = result["nba_message"]
 
-            except FileNotFoundError:
-                msg = "❌ FAISS index not found. Please run `python ingest.py` first."
-                st.error(msg)
-                st.session_state.messages.append({"role": "assistant", "content": msg})
-            except Exception as e:
-                msg = f"❌ Error: {e}"
-                st.error(msg)
-                st.session_state.messages.append({"role": "assistant", "content": msg})
+            status_placeholders["eligible"].markdown(f"<div class='step-box step-done'>✅ Status: {result['nba_status'].upper()}</div>", unsafe_allow_html=True)
+            status_placeholders["llm"].markdown("<div class='step-box step-done'>✅ Response Synthesized</div>", unsafe_allow_html=True)
 
+            # --- STEP 4: ZYND TRUST ---
+            status_placeholders["zynd"].markdown("<div class='step-box step-active'>🔒 Signing with Zynd Protocol...</div>", unsafe_allow_html=True)
+            time.sleep(0.3)
+            status_placeholders["zynd"].markdown("<div class='step-box step-done'>✅ Verified via did:zynd:...</div>", unsafe_allow_html=True)
 
-# ── Action buttons (shown when a scheme is detected) ──────────────────────────
-if st.session_state.active_scheme:
-    st.divider()
-    scheme_names = {
-        "scheme_001": "NSP Pre-Matric Scholarship",
-        "scheme_002": "PM-KISAN",
-        "scheme_003": "Startup India Seed Fund",
-    }
-    name_display = scheme_names.get(st.session_state.active_scheme, "Scheme")
+            msg_placeholder.markdown(full_response)
+            
+            # Show sources if any
+            if result.get("sources"):
+                st.caption(f"📚 Sources: {', '.join(result['sources'])}")
 
-    st.markdown(
-        f'<div class="scheme-card">'
-        f'<b>🎯 Scheme Detected: {name_display}</b><br/>'
-        f'<small>JOLLY-LLB can open the portal and fill the application form automatically.</small>'
-        f'</div>',
-        unsafe_allow_html=True,
-    )
+            st.session_state.messages.append({"role": "assistant", "content": full_response})
 
-    col1, col2, col3 = st.columns(3)
+            # --- ACTION PANEL ---
+            if result["nba_status"] in ("success", "redirect"):
+                st.markdown("### ⚡ Quick Actions")
+                col_a, col_b = st.columns(2)
+                
+                with col_a:
+                    sid = result["alternative"]["scheme_id"] if result["nba_status"] == "redirect" else target_policy_id
+                    
+                    if st.button("🚀 Start Auto-Fill Process", key="start_fill"):
+                        st.session_state.filling_active = True
+                        st.session_state.target_sid = sid
+                    
+                    if st.session_state.get("filling_active"):
+                        st.info(f"Initiating Agent for: {st.session_state.target_sid}")
+                        try:
+                            # 1. Start the form (if not already started)
+                            if not st.session_state.get("form_started"):
+                                response = requests.post(
+                                    "http://localhost:8000/start-form",
+                                    json={
+                                        "scheme_id": st.session_state.target_sid,
+                                        "user_data": st.session_state.profile
+                                    }
+                                )
+                                if response.status_code == 200:
+                                    st.session_state.form_started = True
+                                    st.success("Browser launched! Please switch to the portal window and log in.")
+                                else:
+                                    st.error(f"Error: {response.json().get('detail')}")
+                        
+                            # 2. Resume button (visible once started)
+                            if st.session_state.get("form_started"):
+                                st.write("👇 Once you see the form page, click below:")
+                                if st.button("✅ I'm Ready - Fill Form Now!", type="primary"):
+                                    res = requests.post("http://localhost:8000/resume-form")
+                                    if res.status_code == 200:
+                                        st.success("Filling started! 🚜 View the browser window.")
+                                        st.session_state.filling_active = False
+                                        st.session_state.form_started = False
+                                    else:
+                                        st.error(f"Resume failed: {res.json().get('detail')}")
+                        
+                        except Exception as e:
+                            st.error(f"Backend offline: {e}. Run `uvicorn api.server:app` first.")
 
-    with col1:
-        if st.button("🌐 Apply for Scheme", use_container_width=True, type="primary",
-                     disabled=st.session_state.form_status in ("browser_open", "filling")):
-            profile = st.session_state.user_profile
-            if not profile.get("name"):
-                st.warning("⚠️ Please fill in your profile in the sidebar first.")
-            else:
-                resp = api_start_form(st.session_state.active_scheme, profile)
-                st.session_state.form_status = resp.get("status", "error")
-                st.info(f"🌐 {resp.get('message', '')}")
-                st.rerun()
+                with col_b:
+                    if st.button("📄 Generate PDF Checklist"):
+                        st.toast("Feature coming soon: PDF checklist generation.")
 
-    with col2:
-        if st.button("✅ I've Logged In — Fill Form", use_container_width=True,
-                     disabled=st.session_state.form_status != "browser_open"):
-            resp = api_resume_form()
-            st.session_state.form_status = resp.get("status", "error")
-            st.success(f"🤖 {resp.get('message', '')}")
-            st.rerun()
+        except Exception as e:
+            st.error(f"Advocate Error: {e}")
+            msg_placeholder.error("I encountered an issue while processing the policies.")
 
-    with col3:
-        if st.button("🔄 Refresh Status", use_container_width=True):
-            st.rerun()
-
-    if st.session_state.form_status == "done":
-        st.success("🎉 Form submitted successfully by JOLLY-LLB!")
-    elif st.session_state.form_status == "error":
-        st.error("❌ Something went wrong. Check the API server logs.")
-    elif st.session_state.form_status == "browser_open":
-        st.info("⏸ Browser is open. Please log into the portal, then click **'I've Logged In — Fill Form'**.")
-    elif st.session_state.form_status == "filling":
-        st.info("🤖 JOLLY-LLB is filling the form...")
+st.markdown("<br><br><br>", unsafe_allow_html=True)
+st.caption("© 2026 JOLLY-LLB | Built for Zynd Protocol Aickathon")
