@@ -17,6 +17,7 @@ import datetime
 from dotenv import load_dotenv
 from scripts.query_agent import ask_agent
 
+
 load_dotenv()
 
 # ─────────────────────────────────────────────────────────────
@@ -49,6 +50,7 @@ AGENT_CONFIG = {
         "document_checklist",
         "hinglish_explanation",
         "rag_retrieval",
+        "form_filling",          # NEW: auto-fills govt scheme forms via Playwright
     ],
     "supported_schemes": [
         "Scholarships (NSP Pre-Matric)",

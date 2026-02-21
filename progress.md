@@ -48,6 +48,25 @@ Response to User          ← "Verified by JOLLY-LLB via Zynd Protocol"
 
 ### ✅ Done
 
+<<<<<<< HEAD
+- **`data/dummy_data.py`** — 3 richly structured schemes (NSP Scholarship, PM-KISAN, Startup India SISFS)
+- **`ingest.py`** — Embeds all schemes via Google Gemini, stores to FAISS index — **tested and working**
+- **`scripts/query_agent.py`** — Full RAG pipeline: FAISS retrieval → prompt → Groq LLM → response — **tested and working**
+- **`zynd_node.py`** — Generates DID, registers agent, saves `agent_identity.json`
+- **`test_pipeline.py`** — Step-by-step test: embeddings → retrieval → Groq LLM (all 3 passed ✅)
+- **`app.py`** — Streamlit chat frontend with sidebar profile form, scheme detection, Apply + Fill buttons
+- **`api/server.py`** — FastAPI backend with asyncio.Event pause/resume (`/start-form`, `/resume-form`, `/status`)
+- **`agents/form_filler.py`** — Playwright automation: opens Chromium, pauses for login, fills fields, submits
+- **`templates/dummy_portal.html`** — Realistic fake government portal (login page + application form) for demo
+
+### ❌ Not Yet Built
+
+- **Rule Engine** — Deterministic Python boolean eligibility check (bypasses LLM, 0% hallucination)
+- **User Profile Extractor** — Auto-extract `{"age", "income", ...}` from chat conversation
+- **Web Scraper** — Real scheme data from MyScheme.gov.in (currently 3 hardcoded schemes)
+- **More Schemes** — Need 20–50+ schemes to be useful in production
+
+=======
 - **`data/dummy_data.py`** — 3 richly structured schemes (NSP Scholarship, PM-KISAN, Startup India SISFS), each with eligibility rules, benefits, documents required, and portal URLs
 - **`ingest.py`** — Embeds all schemes via Google Gemini, stores to FAISS index (`faiss_index/`) — **tested and working**
 - **`scripts/query_agent.py`** — Full RAG pipeline: FAISS retrieval → CITIZEN_ADVOCATE_PROMPT → Groq LLM → response with sources — **tested and working**
@@ -63,6 +82,7 @@ Response to User          ← "Verified by JOLLY-LLB via Zynd Protocol"
 - **More Schemes** — Need 20–50+ schemes to be useful
 - **Frontend / UI** — No chat interface yet (CLI only); Streamlit or a simple HTML page needed for demo
 - **FastAPI endpoint** — Required for Zynd network to route external agent calls to this agent (not needed for local demo)
+>>>>>>> c0a5c3d24ef47bb268078f93b9a26418cbea5783
 
 ---
 

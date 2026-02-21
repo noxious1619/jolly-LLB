@@ -219,9 +219,9 @@ def interactive_session():
             if response["sources"]:
                 print(f"\n📚 Sources: {', '.join(response['sources'])}")
         except FileNotFoundError as e:
-            print(f" {e}")
+            print(f"❌ {e}")
         except Exception as e:
-            print(f"Error: {e}")
+            print(f"❌ Error: {e}")
         print("\n" + "─" * 60 + "\n")
 
 
