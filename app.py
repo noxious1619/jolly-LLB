@@ -4,20 +4,20 @@ Run: streamlit run app.py
 
 Features:
   - Chat interface powered by Groq (llama-3.3-70b) + FAISS RAG
-  - "Apply for Scheme" button → calls /start-form (opens browser)
-  - "I've Logged In — Fill Form" button → calls /resume-form (fills form)
-  - Live status polling
+  - Track-2 eligibility gate: deterministic check before LLM response
+  - "Apply for Scheme" button → calls /start-form (opens browser via Playwright)
+  - "I've Logged In — Fill Form" button → calls /resume-form
+  - Live status polling from api/server.py
 """
 
 import streamlit as st
 import requests
-import json
 from dotenv import load_dotenv
 
 load_dotenv()
 
 # ── Config ────────────────────────────────────────────────────────────────────
-API_URL  = "http://localhost:8000"
+API_URL    = "http://localhost:8000"
 PAGE_TITLE = "JOLLY-LLB — Citizen Advocate"
 
 # ── Page setup ────────────────────────────────────────────────────────────────
@@ -57,12 +57,12 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ── Session state ─────────────────────────────────────────────────────────────
-if "messages"     not in st.session_state: st.session_state.messages     = []
-if "user_profile" not in st.session_state: st.session_state.user_profile = {}
-if "active_scheme" not in st.session_state: st.session_state.active_scheme = None
-if "form_status"  not in st.session_state: st.session_state.form_status  = "idle"
+if "messages"      not in st.session_state: st.session_state.messages      = []
+if "user_profile"  not in st.session_state: st.session_state.user_profile  = {}
+if "active_scheme" not in st.session_state: st.session_state.active_scheme  = None
+if "form_status"   not in st.session_state: st.session_state.form_status   = "idle"
 
-# ── Helper: talk to FastAPI ────────────────────────────────────────────────────
+# ── Helper: talk to FastAPI form-filler (api/server.py) ──────────────────────
 def api_start_form(scheme_id: str, user_data: dict):
     try:
         r = requests.post(
@@ -109,18 +109,18 @@ for msg in st.session_state.messages:
 with st.sidebar:
     st.markdown("### 👤 Your Profile")
     st.caption("Fill in your details — the bot uses these to check eligibility and pre-fill the form.")
-    name      = st.text_input("Full Name",          key="name")
-    age       = st.number_input("Age",              min_value=1, max_value=120, value=18, key="age")
+    name      = st.text_input("Full Name",               key="name")
+    age       = st.number_input("Age",                   min_value=1, max_value=120, value=18, key="age")
     community = st.selectbox("Community",
         ["", "Muslim", "Christian", "Sikh", "Buddhist", "Jain", "Zoroastrian", "SC", "ST", "OBC", "General"],
         key="community")
     income    = st.number_input("Annual Family Income (₹)", min_value=0, value=80000, step=1000, key="income")
-    land      = st.number_input("Land Holding (acres)", min_value=0.0, value=0.0, step=0.5, key="land_acres")
-    aadhaar   = st.text_input("Aadhaar Number",     key="aadhaar")
-    bank      = st.text_input("Bank Account No.",   key="bank_account")
+    land      = st.number_input("Land Holding (acres)",   min_value=0.0, value=0.0, step=0.5, key="land_acres")
+    aadhaar   = st.text_input("Aadhaar Number",           key="aadhaar")
+    bank      = st.text_input("Bank Account No.",         key="bank_account")
     class_lvl = st.selectbox("Class Level (students)",
         ["", "1","2","3","4","5","6","7","8","9","10"], key="class_level")
-    school    = st.text_input("School Name",        key="school")
+    school    = st.text_input("School Name",              key="school")
 
     if st.button("💾 Save Profile"):
         st.session_state.user_profile = {
@@ -143,7 +143,7 @@ with st.sidebar:
         "idle": "⚪ Idle", "browser_open": "🟠 Browser Open",
         "filling": "🟣 Filling...", "done": "🟢 Done", "error": "🔴 Error",
     }
-    css_class = color_map.get(s, "status-idle")
+    css_class  = color_map.get(s, "status-idle")
     label_text = label_map.get(s, s)
     st.markdown(
         f'<div class="status-pill {css_class}">{label_text}</div>',
@@ -155,44 +155,99 @@ with st.sidebar:
 
 # ── Chat input ─────────────────────────────────────────────────────────────────
 if prompt := st.chat_input("Ask about any government scheme..."):
-    # Show user message
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Call JOLLY-LLB agent
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
             try:
-                from scripts.query_agent import ask_agent
-                result = ask_agent(prompt)
-                answer  = result["answer"]
-                sources = result.get("sources", [])
+                # ── Track-2 gated response ──────────────────────────────────
+                # If the user has a saved profile with age + income, use the
+                # full eligibility-gated path (ask_agent_with_eligibility).
+                # Otherwise fall back to plain ask_agent (no gate needed).
+                from scripts.query_agent import ask_agent, ask_agent_with_eligibility
+                from app.extractor import resolve_scheme_id
 
-                st.markdown(answer)
-                if sources:
-                    st.caption(f"📚 Sources: {', '.join(sources)}")
+                profile = st.session_state.user_profile
 
-                # Detect which scheme was discussed and enable Apply button
+                # Attempt to detect which scheme is being asked about
                 scheme_map = {
-                    "scholarship": "scheme_001",
-                    "nsp":         "scheme_001",
-                    "pm-kisan":    "scheme_002",
-                    "kisan":       "scheme_002",
-                    "sisfs":       "scheme_003",
-                    "startup":     "scheme_003",
-                    "seed fund":   "scheme_003",
+                    "scholarship": "scheme_001", "nsp": "scheme_001",
+                    "pm-kisan": "scheme_002",    "kisan": "scheme_002",
+                    "sisfs": "scheme_003",        "startup": "scheme_003",
+                    "seed fund": "scheme_003",    "ayushman": "scheme_004",
+                    "pmay": "scheme_005",          "housing": "scheme_005",
+                    "pmkvy": "scheme_007",         "skill": "scheme_007",
+                    "pension": "scheme_008",       "vendor": "scheme_009",
+                    "solar": "scheme_012",
                 }
-                detected = None
-                lower_answer = answer.lower()
+                detected_scheme = None
+                lower_prompt = prompt.lower()
                 for keyword, sid in scheme_map.items():
-                    if keyword in lower_answer or keyword in prompt.lower():
-                        detected = sid
+                    if keyword in lower_prompt:
+                        detected_scheme = sid
                         break
-                if detected:
-                    st.session_state.active_scheme = detected
 
-                st.session_state.messages.append({"role": "assistant", "content": answer})
+                if (
+                    profile.get("age")
+                    and profile.get("income")
+                    and detected_scheme
+                ):
+                    # ── Full Track-2 gated path ─────────────────────────────
+                    user_logic_profile = {
+                        "age":       profile["age"],
+                        "income":    profile["income"],
+                        "community": profile.get("community", ""),
+                        "is_farmer": profile.get("land_acres", 0) > 0,
+                    }
+                    result = ask_agent_with_eligibility(
+                        user_profile=user_logic_profile,
+                        target_policy_id=detected_scheme,
+                        user_query=prompt,
+                    )
+                    # Build a combined reply
+                    nba_status = result["nba_status"]
+                    nba_msg    = result["nba_message"]
+                    answer     = result["answer"]
+                    sources    = result.get("sources", [])
+
+                    if nba_status == "failed":
+                        display = f"❌ {nba_msg}"
+                    elif nba_status == "redirect":
+                        display = f"{nba_msg}\n\n---\n\n{answer}"
+                    else:
+                        display = f"✅ {nba_msg}\n\n---\n\n{answer}"
+
+                    st.markdown(display)
+                    if sources:
+                        st.caption(f"📚 Sources: {', '.join(sources)}")
+
+                    # Enable apply button for the target (or redirected) scheme
+                    alt = result.get("alternative")
+                    active = alt["scheme_id"] if alt else detected_scheme
+                    st.session_state.active_scheme = active
+
+                else:
+                    # ── Plain RAG path (profile not filled yet) ─────────────
+                    result  = ask_agent(prompt)
+                    answer  = result["answer"]
+                    sources = result.get("sources", [])
+
+                    st.markdown(answer)
+                    if sources:
+                        st.caption(f"📚 Sources: {', '.join(sources)}")
+
+                    # Detect scheme for apply button
+                    lower_answer = answer.lower()
+                    for keyword, sid in scheme_map.items():
+                        if keyword in lower_answer or keyword in lower_prompt:
+                            st.session_state.active_scheme = sid
+                            break
+
+                    display = answer
+
+                st.session_state.messages.append({"role": "assistant", "content": display})
 
             except FileNotFoundError:
                 msg = "❌ FAISS index not found. Please run `python ingest.py` first."
@@ -211,8 +266,14 @@ if st.session_state.active_scheme:
         "scheme_001": "NSP Pre-Matric Scholarship",
         "scheme_002": "PM-KISAN",
         "scheme_003": "Startup India Seed Fund",
+        "scheme_004": "Ayushman Bharat PM-JAY",
+        "scheme_005": "PMAY-G (Rural Housing)",
+        "scheme_007": "PMKVY Skill Training",
+        "scheme_008": "IGNOAPS Old Age Pension",
+        "scheme_009": "PM SVANidhi",
+        "scheme_012": "PM Surya Ghar (Solar)",
     }
-    name_display = scheme_names.get(st.session_state.active_scheme, "Scheme")
+    name_display = scheme_names.get(st.session_state.active_scheme, "Detected Scheme")
 
     st.markdown(
         f'<div class="scheme-card">'
