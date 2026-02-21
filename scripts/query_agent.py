@@ -1,5 +1,5 @@
 import os
-from typing import List
+from typing import List, Optional
 from dotenv import load_dotenv
 
 from google import genai as google_genai
@@ -9,6 +9,8 @@ from langchain_core.prompts import PromptTemplate
 from langchain_core.embeddings import Embeddings
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
+
+from logic.next_best_action import handle_policy_request
 
 load_dotenv()
 
@@ -93,7 +95,7 @@ def build_qa_chain(vector_db: FAISS):
 
 
 def ask_agent(user_query: str) -> dict:
-    """Return the agent's answer and source schemes used."""
+    """Return the agent's answer and source schemes used (RAG-only, no eligibility gate)."""
     vector_db = load_vector_db()
     chain, retriever = build_qa_chain(vector_db)
 
@@ -102,6 +104,90 @@ def ask_agent(user_query: str) -> dict:
     sources = list({doc.metadata.get("title", "Unknown") for doc in source_docs})
 
     return {"answer": answer, "sources": sources}
+
+
+def ask_agent_with_eligibility(
+    user_profile: dict,
+    target_policy_id: str,
+    user_query: str,
+) -> dict:
+    """
+    Track-2 — Full eligibility-gated agent call.
+
+    Flow
+    ----
+    1. Load FAISS index.
+    2. Run Next Best Action (deterministic eligibility gate + optional redirect).
+    3a. If eligible   → run RAG chain normally; LLM elaborates on the scheme.
+    3b. If redirected → prepend NBA redirect notice to the question so the LLM
+                        focuses its response on the alternative scheme.
+    3c. If no scheme  → return the NBA failure message directly.
+
+    Parameters
+    ----------
+    user_profile      : dict with user's demographic/financial details
+                        e.g. {"age": 25, "income": 80000, "community": "Muslim"}
+    target_policy_id  : scheme id to check first, e.g. "scheme_001"
+    user_query        : the citizen's free-text question for the LLM
+
+    Returns
+    -------
+    {
+      "nba_status":  "success" | "redirect" | "failed",
+      "nba_message": <NBA verdict string>,
+      "answer":      <LLM response string, or empty on failed>,
+      "sources":     [list of scheme titles used],
+      "alternative": <alternative scheme dict or None>,
+    }
+    """
+    vector_db = load_vector_db()
+
+    # ── Track-2 Gate ──────────────────────────────────────────────────────────
+    nba_result = handle_policy_request(
+        user_profile=user_profile,
+        target_policy_id=target_policy_id,
+        faiss_db=vector_db,
+    )
+
+    status = nba_result["status"]
+
+    # ── No viable scheme — skip LLM ───────────────────────────────────────────
+    if status == "failed":
+        return {
+            "nba_status": "failed",
+            "nba_message": nba_result["message"],
+            "answer": "",
+            "sources": [],
+            "alternative": None,
+        }
+
+    # ── Build the RAG chain ───────────────────────────────────────────────────
+    chain, retriever = build_qa_chain(vector_db)
+
+    if status == "redirect":
+        # Steer the LLM toward the alternative scheme
+        alt = nba_result["alternative"]
+        enriched_query = (
+            f"{nba_result['message']}\n\n"
+            f"Please elaborate on the alternative scheme "
+            f"'{alt['name']}' and provide eligibility details and next steps. "
+            f"Original citizen question: {user_query}"
+        )
+    else:
+        # Directly eligible — answer the original question
+        enriched_query = user_query
+
+    answer = chain.invoke(enriched_query)
+    source_docs = retriever.invoke(enriched_query)
+    sources = list({doc.metadata.get("title", "Unknown") for doc in source_docs})
+
+    return {
+        "nba_status": status,
+        "nba_message": nba_result["message"],
+        "answer": answer,
+        "sources": sources,
+        "alternative": nba_result.get("alternative"),
+    }
 
 
 def interactive_session():

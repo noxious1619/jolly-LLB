@@ -1,0 +1,26 @@
+[PASS] 001-eligible-basic: ok=True, reason='Eligible'
+[PASS] 001-income-too-high: ok=False, reason='Annual family income ₹200,000 exceeds the maximum allowed limit of ₹100,000 for this scheme.'
+[PASS] 001-age-too-high: ok=False, reason='Age exceeds the maximum limit of 17 for this scheme.'
+[PASS] 001-wrong-community: ok=False, reason='Community 'Hindu' is not eligible. Allowed communities: Muslim, Christian, Sikh, Buddhist, Jain, Zoroastrian.'
+[PASS] 001-community-case-insensitive: ok=True, reason='Eligible'
+[PASS] 002-eligible-farmer: ok=True, reason='Eligible'
+[PASS] 002-not-a-farmer: ok=False, reason='Applicant must be a land-holding farmer for this scheme.'
+[PASS] 002-excluded-occupation: ok=False, reason='Occupation 'income_tax_payer' is in the excluded category for this scheme.'
+[PASS] 002-underage: ok=False, reason='Age is below the minimum requirement of 18.'
+[PASS] 003-eligible-startup: ok=True, reason='Eligible'
+[PASS] 003-no-dpiit: ok=False, reason='Startup must have DPIIT recognition. Register at startupindia.gov.in first.'
+[PASS] 003-startup-too-old: ok=False, reason='Startup age 3 years exceeds the maximum allowed 2 years from incorporation.'
+[PASS] 003-over-funded: ok=False, reason='Prior government funding ₹2,000,000 exceeds the allowed ceiling of ₹1,000,000.'
+[PASS] 007-eligible-youth: ok=True, reason='Eligible'
+[PASS] 007-too-old: ok=False, reason='Age exceeds the maximum limit of 45 for this scheme.'
+[PASS] 008-eligible-senior: ok=True, reason='Eligible'
+[PASS] 008-too-young: ok=False, reason='Age is below the minimum requirement of 60.'
+[PASS] 008-not-bpl: ok=False, reason='Applicant must belong to a Below Poverty Line (BPL) household.'
+[PASS] 010-eligible-sc: ok=True, reason='Eligible'
+[PASS] 010-income-too-high: ok=False, reason='Annual family income ₹300,000 exceeds the maximum allowed limit of ₹250,000 for this scheme.'
+[PASS] unknown-policy: ok=False, reason='Policy 'scheme_999' not found in the database.'
+[PASS] income-as-string: ok=True, reason='Eligible'
+
+==================================================
+TOTAL: 22 tests — 22 PASSED, 0 FAILED
+✅ ALL TESTS PASSED — Eligibility Engine is working correctly!

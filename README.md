@@ -38,7 +38,7 @@ policy-Navigator/
 git clone <your-repo-url>
 cd policy-Navigator
 python -m venv venv
-venv\Scripts\activate          # Windows
+venv\Scripts\activate          
 pip install -r requirements.txt
 ```
 
