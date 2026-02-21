@@ -53,15 +53,36 @@ class GeminiEmbeddings(Embeddings):
 
 
 def build_documents(schemes: list) -> List[Document]:
+    """
+    Convert scheme dicts to LangChain Documents.
+
+    Metadata includes numerical eligibility limits (max_income_inr, min_age,
+    max_age) so the Track-2 Next Best Action layer can filter candidates
+    without expensive full-text re-parsing.
+    """
     docs = []
     for scheme in schemes:
-        eligibility = json.dumps(scheme.get("eligibility", {}), ensure_ascii=False, indent=2)
+        eligibility = scheme.get("eligibility", {})
+        eligibility_json = json.dumps(eligibility, ensure_ascii=False, indent=2)
         content = (
             f"Scheme: {scheme.get('name')}\n"
             f"Description: {scheme.get('description')}\n"
-            f"Eligibility: {eligibility}"
+            f"Eligibility: {eligibility_json}"
         )
-        docs.append(Document(page_content=content, metadata={"title": scheme.get("name")}))
+        # ── Numerical metadata for Track-2 NBA metadata filtering ────────────
+        metadata = {
+            "title": scheme.get("name", ""),
+            "scheme_id": scheme.get("id", ""),
+            "category": scheme.get("category", ""),
+            # Income ceiling — defaults to inf (no cap) for schemes without one
+            "max_income_inr": float(
+                eligibility.get("annual_family_income_max_inr", float("inf"))
+            ),
+            # Age bounds — generous defaults
+            "min_age": int(eligibility.get("min_age", 0)),
+            "max_age": int(eligibility.get("max_age", 999)),
+        }
+        docs.append(Document(page_content=content, metadata=metadata))
     return docs
 
 
