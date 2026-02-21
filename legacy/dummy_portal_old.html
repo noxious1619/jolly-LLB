@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>National Scheme Portal — Government of India</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: #f0f2f5;
+            color: #1a1a1a;
+        }
+
+        /* ── Header ── */
+        .header {
+            background: linear-gradient(135deg, #ff6f00, #e65100);
+            color: white;
+            padding: 0;
+        }
+
+        .header-top {
+            background: #1a237e;
+            padding: 6px 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 12px;
+        }
+
+        .ashoka {
+            font-size: 28px;
+        }
+
+        .header-main {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 12px 24px;
+        }
+
+        .emblem {
+            font-size: 52px;
+        }
+
+        .portal-title {
+            line-height: 1.3;
+        }
+
+        .portal-title h1 {
+            font-size: 22px;
+            font-weight: 700;
+        }
+
+        .portal-title p {
+            font-size: 13px;
+            opacity: 0.9;
+        }
+
+        .nav-bar {
+            background: #283593;
+            padding: 0 24px;
+            display: flex;
+            gap: 0;
+        }
+
+        .nav-bar a {
+            color: #c5cae9;
+            text-decoration: none;
+            padding: 10px 16px;
+            font-size: 13px;
+            display: inline-block;
+            border-right: 1px solid #3949ab;
+            transition: background 0.2s;
+        }
+
+        .nav-bar a:hover,
+        .nav-bar a.active {
+            background: #1a237e;
+            color: white;
+        }
+
+        /* ── Main content ── */
+        .container {
+            max-width: 800px;
+            margin: 30px auto;
+            padding: 0 16px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+            padding: 32px;
+            margin-bottom: 20px;
+        }
+
+        .card h2 {
+            color: #1a237e;
+            border-bottom: 2px solid #e8eaf6;
+            padding-bottom: 12px;
+            margin-bottom: 20px;
+            font-size: 18px;
+        }
+
+        .badge {
+            display: inline-block;
+            background: #e8f5e9;
+            color: #2e7d32;
+            border: 1px solid #a5d6a7;
+            border-radius: 4px;
+            padding: 4px 10px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 16px;
+        }
+
+        /* ── Form ── */
+        .form-group {
+            margin-bottom: 18px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: #37474f;
+            margin-bottom: 6px;
+        }
+
+        .form-group label .req {
+            color: #c62828;
+            margin-left: 3px;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #b0bec5;
+            border-radius: 5px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+            background: #fafafa;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #3f51b5;
+            background: white;
+            box-shadow: 0 0 0 3px rgba(63, 81, 181, 0.12);
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #1a237e, #283593);
+            color: white;
+            border: none;
+            padding: 12px 32px;
+            border-radius: 5px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 8px;
+            transition: opacity 0.2s;
+        }
+
+        .btn-primary:hover {
+            opacity: 0.9;
+        }
+
+        .info-box {
+            background: #e3f2fd;
+            border-left: 4px solid #1565c0;
+            padding: 12px 16px;
+            border-radius: 4px;
+            font-size: 13px;
+            color: #0d47a1;
+            margin-bottom: 20px;
+        }
+
+        .watermark {
+            text-align: center;
+            color: #90a4ae;
+            font-size: 12px;
+            margin-top: 24px;
+            padding-bottom: 40px;
+        }
+
+        /* ── Login / Form sections ── */
+        #application-form {
+            display: none;
+        }
+
+        #success-section {
+            display: none;
+            text-align: center;
+            padding: 40px 20px;
+        }
+
+        .success-icon {
+            font-size: 64px;
+            margin-bottom: 16px;
+        }
+
+        .success-title {
+            color: #2e7d32;
+            font-size: 22px;
+            font-weight: 700;
+        }
+
+        .ref-number {
+            color: #555;
+            margin-top: 8px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- ── Header ── -->
+    <div class="header">
+        <div class="header-top">
+            <span>🇮🇳</span>
+            <span>Government of India — National Scheme Portal (DEMO)</span>
+        </div>
+        <div class="header-main">
+            <div class="emblem">🏛️</div>
+            <div class="portal-title">
+                <h1>National Scheme Portal</h1>
+                <p>Unified Gateway for Government Welfare Schemes — Demo Environment</p>
+            </div>
+        </div>
+        <div class="nav-bar">
+            <a href="#" class="active">Home</a>
+            <a href="#">Schemes</a>
+            <a href="#">Track Application</a>
+            <a href="#">Help</a>
+        </div>
+    </div>
+
+    <div class="container">
+
+        <!-- ── Login Section ── -->
+        <div class="card" id="login-section">
+            <h2>🔐 Applicant Login</h2>
+            <div class="info-box">
+                ℹ️ This is a <strong>demo portal</strong> for JOLLY-LLB Hackathon testing.
+                Log in with any credentials, then click <strong>"Proceed to Application"</strong>.
+                The JOLLY-LLB bot will fill the form automatically after you click <em>"Fill Form"</em> in the chat.
+            </div>
+
+            <div class="form-group">
+                <label>Aadhaar Number / Registered Mobile <span class="req">*</span></label>
+                <input type="text" id="login-aadhaar" placeholder="e.g. 1234-5678-9012" />
+            </div>
+            <div class="form-group">
+                <label>Password <span class="req">*</span></label>
+                <input type="password" id="login-password" placeholder="Enter your password" />
+            </div>
+
+            <button class="btn-primary" id="go-to-form" onclick="showForm()">
+                🚀 Proceed to Application Form
+            </button>
+        </div>
+
+        <!-- ── Application Form ── -->
+        <div class="card" id="application-form">
+            <span class="badge">✅ Logged In</span>
+            <h2>📋 Scheme Application Form</h2>
+
+            <div class="info-box">
+                🤖 <strong>JOLLY-LLB Auto-Fill Active</strong> — Fields below will be filled automatically
+                once you confirm in the chat interface.
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Full Name <span class="req">*</span></label>
+                    <input type="text" id="applicant-name" placeholder="As per Aadhaar" />
+                </div>
+                <div class="form-group">
+                    <label>Age <span class="req">*</span></label>
+                    <input type="number" id="applicant-age" placeholder="e.g. 16" min="1" max="120" />
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Community / Category <span class="req">*</span></label>
+                    <select id="applicant-community">
+                        <option value="">— Select —</option>
+                        <option value="Muslim">Muslim</option>
+                        <option value="Christian">Christian</option>
+                        <option value="Sikh">Sikh</option>
+                        <option value="Buddhist">Buddhist</option>
+                        <option value="Jain">Jain</option>
+                        <option value="Zoroastrian">Zoroastrian</option>
+                        <option value="SC">SC</option>
+                        <option value="ST">ST</option>
+                        <option value="OBC">OBC</option>
+                        <option value="General">General</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Class Level <span class="req">*</span></label>
+                    <select id="class-level">
+                        <option value="">— Select —</option>
+                        <option value="1">Class 1</option>
+                        <option value="2">Class 2</option>
+                        <option value="3">Class 3</option>
+                        <option value="4">Class 4</option>
+                        <option value="5">Class 5</option>
+                        <option value="6">Class 6</option>
+                        <option value="7">Class 7</option>
+                        <option value="8">Class 8</option>
+                        <option value="9">Class 9</option>
+                        <option value="10">Class 10</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>School Name <span class="req">*</span></label>
+                <input type="text" id="school-name" placeholder="Name of your school/institution" />
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Annual Family Income (₹) <span class="req">*</span></label>
+                    <input type="number" id="family-income" placeholder="e.g. 80000" />
+                </div>
+                <div class="form-group">
+                    <label>Land Holding (acres)</label>
+                    <input type="number" id="land-acres" placeholder="e.g. 2.5 (for PM-KISAN)" step="0.1" />
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Aadhaar Number <span class="req">*</span></label>
+                    <input type="text" id="aadhaar-number" placeholder="XXXX-XXXX-XXXX" />
+                </div>
+                <div class="form-group">
+                    <label>Bank Account Number <span class="req">*</span></label>
+                    <input type="text" id="bank-account" placeholder="For DBT payment" />
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Startup Name</label>
+                <input type="text" id="startup-name" placeholder="If applying for SISFS" />
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>DPIIT Number</label>
+                    <input type="text" id="dpiit-number" placeholder="If DPIIT recognized" />
+                </div>
+                <div class="form-group">
+                    <label>Email Address</label>
+                    <input type="email" id="email" placeholder="your@email.com" />
+                </div>
+            </div>
+
+            <button class="btn-primary" id="submit-btn" onclick="submitForm()">
+                📤 Submit Application
+            </button>
+        </div>
+
+        <!-- ── Success Section ── -->
+        <div class="card" id="success-section">
+            <div class="success-icon">✅</div>
+            <div class="success-title">Application Submitted Successfully!</div>
+            <div class="ref-number" id="ref-number"></div>
+            <p style="margin-top:16px; color:#555; font-size:14px;">
+                Your application has been submitted. You will receive an SMS on your Aadhaar-linked number.
+                Track your application at <strong>scholarships.gov.in</strong>.
+            </p>
+            <p style="margin-top:12px; color:#888; font-size:12px;">
+                🤖 Submitted automatically by <strong>JOLLY-LLB</strong> via Zynd Protocol
+            </p>
+        </div>
+
+        <div class="watermark">
+            🏛️ Government of India — National Scheme Portal (DEMO) | Built for JOLLY-LLB · Zynd Aickathon 2026
+        </div>
+    </div>
+
+    <script>
+        function showForm() {
+            document.getElementById('login-section').style.display = 'none';
+            document.getElementById('application-form').style.display = 'block';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function submitForm() {
+            document.getElementById('application-form').style.display = 'none';
+            const success = document.getElementById('success-section');
+            success.style.display = 'block';
+            const ref = 'REF-' + Math.random().toString(36).substr(2, 9).toUpperCase();
+            document.getElementById('ref-number').textContent = 'Reference Number: ' + ref;
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    </script>
+</body>
+
+</html>
