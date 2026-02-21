@@ -35,13 +35,13 @@ print("=" * 60)
 print("\n[1/3] Testing Google embedding model...")
 emb = GeminiEmbeddings()
 vec = emb.embed_query("test")
-print(f"  ✅ Embedding OK — vector dim: {len(vec)}")
+print(f"   Embedding OK — vector dim: {len(vec)}")
 
 # Step 2: FAISS Retrieval
 print("\n[2/3] Retrieving relevant schemes from FAISS...")
 db = FAISS.load_local(FAISS_INDEX_PATH, emb, allow_dangerous_deserialization=True)
 docs = db.similarity_search(question, k=3)
-print(f"  ✅ Retrieved {len(docs)} scheme(s):")
+print(f"   Retrieved {len(docs)} scheme(s):")
 for d in docs:
     print(f"     • {d.metadata.get('title')}")
 context = "\n\n".join(d.page_content[:400] for d in docs)
@@ -66,12 +66,12 @@ Question: {question}
 Response:"""
 
 response = llm.invoke([HumanMessage(content=prompt)])
-print(f"  ✅ Groq LLM responded!\n")
+print(f"   Groq LLM responded!\n")
 print("─" * 60)
 print(f"Question: {question}\n")
 print("JOLLY-LLB Answer:")
 print("─" * 60)
 print(response.content)
 print("=" * 60)
-print("  ✅ PIPELINE TEST PASSED — All 3 components working!")
+print("  PIPELINE TEST PASSED — All 3 components working!")
 print("=" * 60)
