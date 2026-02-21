@@ -17,6 +17,7 @@ import datetime
 from dotenv import load_dotenv
 from scripts.query_agent import ask_agent
 
+
 load_dotenv()
 
 # ─────────────────────────────────────────────────────────────

@@ -1,164 +1,141 @@
-
 import os
 from typing import List
 from dotenv import load_dotenv
-import google.generativeai as genai
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_community.vectorstores import Chroma
-from langchain.chains import RetrievalQA
+
+from google import genai as google_genai
+from langchain_groq import ChatGroq
+from langchain_community.vectorstores import FAISS
 from langchain_core.prompts import PromptTemplate
 from langchain_core.embeddings import Embeddings
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import RunnablePassthrough
 
 load_dotenv()
 
-# ── Custom Embeddings class using google.generativeai REST API ──────────────
-# Bypasses the broken gRPC/v1beta path in the installed langchain-google-genai.
-class GeminiEmbeddings(Embeddings):
-    """LangChain-compatible embeddings via google.generativeai REST API."""
+FAISS_INDEX_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "faiss_index")
 
-    def __init__(self, model: str = "models/text-embedding-004"):
-        genai.configure(api_key=os.environ["GOOGLE_API_KEY"])
+
+class GeminiEmbeddings(Embeddings):
+    """Google embeddings for semantic search (Groq has no embedding API)."""
+
+    def __init__(self, model: str = "models/gemini-embedding-001"):
+        self.client = google_genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
         self.model = model
 
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
-        return [
-            genai.embed_content(model=self.model, content=text)["embedding"]
-            for text in texts
-        ]
+        result = self.client.models.embed_content(model=self.model, contents=texts)
+        return [e.values for e in result.embeddings]
 
     def embed_query(self, text: str) -> List[float]:
-        return genai.embed_content(model=self.model, content=text)["embedding"]
+        result = self.client.models.embed_content(model=self.model, contents=[text])
+        return result.embeddings[0].values
 
-# ─────────────────────────────────────────────
-# SYSTEM PROMPT — Citizen Advocate Personality
-# ─────────────────────────────────────────────
-CITIZEN_ADVOCATE_SYSTEM_PROMPT = """
-You are **JOLLY-LLB**, a trusted Citizen Advocate AI assistant powered by the Zynd Protocol.
-Your mission is to make Indian government policies simple, accessible, and actionable for every citizen.
-
-## Your Core Responsibilities:
-1. **Policy Summary (Hinglish):** Always summarize the policy in simple, friendly Hinglish (Hindi + English mix).
-   - Use easy-to-understand language. Avoid complex legal jargon.
-   - Example tone: "Yeh scheme farmers ke liye hai jo Rs. 6,000 per saal deti hai seedhe bank mein."
-
-2. **Explicit Eligibility Check:** Clearly state WHO qualifies and WHO does NOT.
-   - List income limits, age range, category restrictions, and land/profession requirements.
-
-3. **Ask for Missing Details:** If the user hasn't told you their income, age, category (SC/ST/OBC/Minority),
-   or land holding, POLITELY ASK these follow-up questions before giving a final eligibility verdict.
-   - Example: "Aapki annual family income kitni hai? Aur aap kis community se belong karte hain?"
-
-4. **Next Steps:** Always end with clear, numbered "NEXT STEPS" for how to apply — including the portal URL.
-
-5. **Trust Signal:** End each response with: "✅ Verified by JOLLY-LLB via Zynd Protocol — Trustworthy Information."
-
-## Formatting Rules:
-- Use bullet points and numbered lists for clarity.
-- Use emojis sparingly but effectively: 📋 for eligibility, 💰 for benefits, 📝 for steps, ❓ for questions.
-- Always respond in the language mix the user prefers (Hindi, English, or Hinglish).
-
-## Retrieved Context:
-{context}
-
-## Citizen's Question:
-{question}
-
-## Your Response (as JOLLY-LLB, Citizen Advocate):
-"""
 
 CITIZEN_ADVOCATE_PROMPT = PromptTemplate(
     input_variables=["context", "question"],
-    template=CITIZEN_ADVOCATE_SYSTEM_PROMPT,
+    template="""You are JOLLY-LLB, a trusted Citizen Advocate AI powered by the Zynd Protocol.
+Your mission is to make Indian government policies simple, accessible, and actionable for every citizen.
+
+## Your Responsibilities:
+1. **Policy Summary:** Explain the policy clearly and simply.
+2. **Eligibility Check:** Clearly state who qualifies and who does NOT, listing all conditions.
+3. **Ask Missing Details:** If income, age, category, or land holding are not mentioned, ask politely.
+4. **Next Steps:** Provide numbered application steps with the official portal URL.
+5. **Trust Signal:** End with: "Verified by JOLLY-LLB via Zynd Protocol."
+
+Use emojis: 📋 eligibility, 💰 benefits, 📝 steps, ❓ questions.
+
+## Context from Knowledge Base:
+{context}
+
+## Citizen Question:
+{question}
+
+## JOLLY-LLB Response:
+""",
 )
 
 
-def load_vector_db() -> Chroma:
-    """Load the existing ChromaDB vector store."""
-    embeddings = GeminiEmbeddings(model="models/text-embedding-004")
-    db_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "vector_db")
-    vector_db = Chroma(
-        persist_directory=db_path,
-        embedding_function=embeddings,
+def load_vector_db() -> FAISS:
+    """Load the FAISS vector store saved by ingest.py."""
+    if not os.path.exists(FAISS_INDEX_PATH):
+        raise FileNotFoundError(
+            f"FAISS index not found at '{FAISS_INDEX_PATH}'.\n"
+            "Run first: python ingest.py"
+        )
+    embeddings = GeminiEmbeddings()
+    return FAISS.load_local(
+        FAISS_INDEX_PATH,
+        embeddings,
+        allow_dangerous_deserialization=True,
     )
-    return vector_db
 
 
-def build_qa_chain(vector_db: Chroma) -> RetrievalQA:
-    """Build the LangChain RetrievalQA chain with the Citizen Advocate prompt."""
-    llm = ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash",
-        temperature=0.3,           
-        convert_system_message_to_human=True,
+def build_qa_chain(vector_db: FAISS):
+    """Build a RAG chain using Groq LLM + FAISS retriever."""
+    llm = ChatGroq(
+        model="llama-3.3-70b-versatile",
+        temperature=0.3,
+        api_key=os.environ.get("GROQ_API_KEY"),
     )
-    qa_chain = RetrievalQA.from_chain_type(
-        llm=llm,
-        chain_type="stuff",
-        retriever=vector_db.as_retriever(
-            search_type="similarity",
-            search_kwargs={"k": 3},
-        ),
-        chain_type_kwargs={"prompt": CITIZEN_ADVOCATE_PROMPT},
-        return_source_documents=True,
+    retriever = vector_db.as_retriever(search_type="similarity", search_kwargs={"k": 3})
+
+    def format_docs(docs):
+        return "\n\n".join(doc.page_content for doc in docs)
+
+    chain = (
+        {"context": retriever | format_docs, "question": RunnablePassthrough()}
+        | CITIZEN_ADVOCATE_PROMPT
+        | llm
+        | StrOutputParser()
     )
-    return qa_chain
+    return chain, retriever
 
 
 def ask_agent(user_query: str) -> dict:
-    """
-    Main entry point: given a user question, return the agent's answer
-    and the source scheme documents used for context.
-
-    Returns:
-        {
-            "answer": str,
-            "sources": list[str]   # scheme titles retrieved
-        }
-    """
+    """Return the agent's answer and source schemes used."""
     vector_db = load_vector_db()
-    qa_chain = build_qa_chain(vector_db)
+    chain, retriever = build_qa_chain(vector_db)
 
-    result = qa_chain.invoke({"query": user_query})
+    answer = chain.invoke(user_query)
+    source_docs = retriever.invoke(user_query)
+    sources = list({doc.metadata.get("title", "Unknown") for doc in source_docs})
 
-    # Extract unique source scheme names
-    sources = list({
-        doc.metadata.get("title", "Unknown Scheme")
-        for doc in result.get("source_documents", [])
-    })
-
-    return {
-        "answer": result["result"],
-        "sources": sources,
-    }
+    return {"answer": answer, "sources": sources}
 
 
 def interactive_session():
-    """Run an interactive CLI session with the Citizen Advocate."""
+    """Run an interactive CLI session with JOLLY-LLB."""
     print("\n" + "═" * 60)
-    print("  🇮🇳  POLICY-NAVIGATOR — Citizen Advocate (JOLLY-LLB)")
-    print("  Powered by Zynd Protocol + Gemini 2.5 Pro")
+    print("  🇮🇳  JOLLY-LLB — Citizen Advocate")
+    print("  Powered by Zynd Protocol + Groq (Llama 3.3 70B)")
     print("═" * 60)
-    print("  Type your question in Hindi, English, or Hinglish.")
-    print("  Type 'exit' or 'quit' to end the session.\n")
+    print("  Ask about any Indian government scheme.")
+    print("  Type 'exit' to quit.\n")
 
     while True:
         try:
             user_input = input("You: ").strip()
         except (EOFError, KeyboardInterrupt):
-            print("\n\nJOLLY-LLB: Dhanyavaad! Zynd Protocol ke saath jude rehna. 🙏")
+            print("\n\nJOLLY-LLB: Thank you! Stay connected with the Zynd Protocol. 🙏")
             break
 
         if not user_input:
             continue
         if user_input.lower() in ("exit", "quit", "bye"):
-            print("JOLLY-LLB: Dhanyavaad! Zynd Protocol ke saath jude rehna. 🙏")
+            print("JOLLY-LLB: Thank you! Stay connected with the Zynd Protocol. 🙏")
             break
 
         print("\nJOLLY-LLB: (Thinking...)\n")
-        response = ask_agent(user_input)
-
-        print(f"JOLLY-LLB:\n{response['answer']}")
-        if response["sources"]:
-            print(f"\n📚 Sources consulted: {', '.join(response['sources'])}")
+        try:
+            response = ask_agent(user_input)
+            print(f"JOLLY-LLB:\n{response['answer']}")
+            if response["sources"]:
+                print(f"\n📚 Sources: {', '.join(response['sources'])}")
+        except FileNotFoundError as e:
+            print(f"❌ {e}")
+        except Exception as e:
+            print(f"❌ Error: {e}")
         print("\n" + "─" * 60 + "\n")
 
 
