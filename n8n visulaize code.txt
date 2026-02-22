@@ -1,0 +1,85 @@
+flowchart TD
+
+%% =====================
+%% USER ENTRY
+%% =====================
+
+U[Citizen User]
+
+U --> M{Interaction Mode}
+
+M -->|Mode 1: Discovery| D1[Scheme Discovery Flow]
+M -->|Mode 2: Goal-Based| D2[Goal-Specific Flow]
+
+D1 --> O
+D2 --> O
+
+%% =====================
+%% ORCHESTRATOR
+%% =====================
+
+subgraph Orchestrator Layer
+O[ZYND Orchestrator]
+end
+
+O --> PRA
+
+%% =====================
+%% POLICY REASONING AGENT
+%% =====================
+
+subgraph AI Layer
+PRA[Policy Reasoning Agent<br>RAG + Structured Extraction]
+
+PRA --> ER[Extract Eligibility Rules]
+PRA --> PR[Extract Process Steps]
+PRA --> DR[Extract Document Requirements]
+PRA --> CT[Attach Citations]
+end
+
+ER --> DV
+PR --> DV
+DR --> DV
+
+%% =====================
+%% DETERMINISTIC VALIDATION
+%% =====================
+
+subgraph Deterministic Engine
+DV[Eligibility Validation Engine]
+
+DV --> EL{Eligibility Decision}
+
+EL -->|Eligible| EG[Eligible]
+EL -->|Not Eligible| NE[Not Eligible]
+
+DV --> MC[Missing Criteria]
+DV --> CS[Confidence Score]
+end
+
+EG --> FP
+NE --> AP
+
+%% =====================
+%% FORM & GUIDANCE
+%% =====================
+
+subgraph Output Generation
+FP[Form Preparation Module]
+AP[Appeal Pathway Generator]
+
+FP --> GG
+AP --> GG
+
+GG[Guidance Generator<br>Structured Explanation + Trust Layer]
+
+GG --> PDF[Generate Downloadable PDF]
+GG --> FO[Final Structured Output]
+end
+
+%% =====================
+%% FINAL OUTPUT
+%% =====================
+
+PDF --> R[Citizen Receives Result]
+FO --> R
